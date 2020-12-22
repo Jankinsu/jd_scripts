@@ -6,7 +6,7 @@ const $ = new Env('开卡活动');
 const notify = $.isNode() ? require('./sendNotify') : '';
 //Node.js用户请在jdCookie.js处填写京东ck;
 const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
-let configList = ["893e8f30509c45679f04ca55293fc293","cb0880b159574f0ab3400be8fe4fc484"]
+let configList = ["d4b1debce2d84884a40c04c30b863d94"]
 let configCode = ''
 //IOS等用户直接用NobyDa的jd cookie
 let cookiesArr = [], cookie = '', message;
@@ -66,6 +66,8 @@ const JD_API_HOST = 'https://jdjoy.jd.com/module/';
   })
 
 async function jdBeanHome() {
+  $.bean = 0
+  $.canDone = true
   await getCardInfo()
   await getTaskList()
 }
@@ -100,6 +102,7 @@ function getTaskList() {
             data = JSON.parse(data);
             if(data['success']){
               for (let i = 0; i < data.data.myTasks.length; ++i){
+                if (!$.canDone) break
                 const task = data.data.myTasks[i]
                 let groupType
                 if(task.groupType===1) {
@@ -119,17 +122,20 @@ function getTaskList() {
                 }
                 for (let j = task.finishCount; j < task.itemCount; ++j){
                   await doTask(groupType, task.item.itemId)
+                  if (!$.canDone) break
                   await $.wait(task.viewTime < 5 ? 5000 : task.viewTime*1000)
                 }
               }
               if (data.data.rewardStatus!==3) {
                 $.log(`去领取额外${data.data.rewardFinish}京豆`)
-                await doTask("FINISH_TASK",0)
+                //await $.wait(10000)
                 const res = await doTask("FINISH_TASK",0)
                 if(res['success']){
-                  $.log(`领取额外${data.data.rewardFinish}京豆完成成功，获得${data.data.rewardFinish}京豆`)
+                  $.log(`额外京豆领取成功，获得${data.data.rewardFinish}京豆`)
+                  $.bean += data.data.rewardFinish
                 }
               }
+              $.log(`任务已全部完成，共计获得${$.bean}京豆`)
             } else{
               console.log('获取失败，请检查是否黑号')
             }
@@ -155,7 +161,12 @@ function doTask(groupType,itemId) {
             data = JSON.parse(data);
             if(data['success']){
               console.log(`任务完成成功`)
+              if(groupType!=='FINISH_TASK') $.bean += 1
             }else{
+              if(data['errorMessage'] === '请稍后重试'){
+                $.canDone = false
+                console.log(`风控用户，跳过`)
+              }
               console.log('任务完成失败')
             }
           }
